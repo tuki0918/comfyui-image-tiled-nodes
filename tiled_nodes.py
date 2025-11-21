@@ -19,7 +19,7 @@ class TiledImageSplitter:
                 "overlap": ("INT", {"default": 128, "min": 0, "max": 512, "step": 8}),
                 "feather_ratio": (
                     "FLOAT",
-                    {"default": 0.1, "min": 0.01, "max": 0.5, "step": 0.01},
+                    {"default": 0.1, "min": 0.0, "max": 0.5, "step": 0.01},
                 ),
             }
         }
