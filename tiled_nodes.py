@@ -10,7 +10,7 @@ class TiledImageSplitter:
                 "tile_width": ("INT", {"default": 1024, "min": 64, "max": 8192, "step": 8}),
                 "tile_height": ("INT", {"default": 1024, "min": 64, "max": 8192, "step": 8}),
                 "overlap": ("INT", {"default": 128, "min": 0, "max": 512, "step": 8}),
-                "feather_ratio": ("FLOAT", {"default": 0.1, "min": 0.0, "max": 0.5, "step": 0.01}),
+                "feather_ratio": ("FLOAT", {"default": 0.1, "min": 0.01, "max": 0.5, "step": 0.01}),
             }
         }
 
