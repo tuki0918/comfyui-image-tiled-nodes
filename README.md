@@ -14,7 +14,7 @@ Custom nodes for ComfyUI that allow splitting large images into overlapping tile
 1.  Navigate to your ComfyUI `custom_nodes` directory.
 2.  Clone this repository:
     ```bash
-    git clone https://github.com/your-username/comfyui-image-tiled-crop-nodes.git
+    git clone https://github.com/tuki0918/comfyui-image-tiled-nodes.git
     ```
 3.  Restart ComfyUI.
 
