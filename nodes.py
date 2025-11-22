@@ -175,6 +175,31 @@ class TiledImageMerger:
             y = pos["y"]
             h, w, c = tile.shape
 
+            # Ensure tile matches expected dimensions from position info if possible,
+            # or resize tile to match the slot size (ComfyUI images are [H, W, C])
+
+            # Expected size from split
+            expected_w = tile_info["tile_width"]
+            expected_h = tile_info["tile_height"]
+
+            # Actual tile size
+            tile_h, tile_w, tile_c = tile.shape
+
+            if tile_h != expected_h or tile_w != expected_w:
+                # Resize tile to expected dimensions
+                # torch interpolate expects [B, C, H, W]
+                tile_permuted = tile.permute(2, 0, 1).unsqueeze(0)  # [1, C, H, W]
+                tile_resized = torch.nn.functional.interpolate(
+                    tile_permuted,
+                    size=(expected_h, expected_w),
+                    mode="bilinear",
+                    align_corners=False,
+                )
+                tile = tile_resized.squeeze(0).permute(1, 2, 0)  # [H, W, C]
+
+                # Update dimensions
+                h, w, c = tile.shape
+
             # Re-create the feather mask for weighting
             # Ideally we should pass the mask through, but re-generating is cheap
             # and saves memory bandwidth if unchanged.
