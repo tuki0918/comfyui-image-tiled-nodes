@@ -2,6 +2,15 @@
 
 Custom nodes for ComfyUI that allow splitting large images into overlapping tiles for processing (e.g., Inpainting/Upscaling) and merging them back seamlessly with feathering blending.
 
+### Image Splitting Example
+
+![](https://raw.githubusercontent.com/tuki0918/comfyui-image-tiled-nodes/refs/heads/docs/docs/image1.png)
+
+
+### Merging Split Images Example (Upscale)
+
+![](https://raw.githubusercontent.com/tuki0918/comfyui-image-tiled-nodes/refs/heads/docs/docs/image2.png)
+
 ## Features
 
 *   **Split Large Images**: Split a large image into smaller tiles suitable for diffusion models.
