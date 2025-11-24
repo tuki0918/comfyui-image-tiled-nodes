@@ -157,7 +157,8 @@ class TiledImageMerger:
 
         # Create output tensor [B, H, W, C]
         # We need an accumulator for color and an accumulator for weights (alpha)
-        output = torch.zeros((batch_size, orig_h, orig_w, 3), dtype=torch.float32)
+        channels = images.shape[-1] if len(images) > 0 else 3
+        output = torch.zeros((batch_size, orig_h, orig_w, channels), dtype=torch.float32)
         weights = torch.zeros((batch_size, orig_h, orig_w, 1), dtype=torch.float32)
 
         tile_idx = 0
