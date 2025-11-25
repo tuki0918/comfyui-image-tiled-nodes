@@ -64,3 +64,5 @@ Merges the processed tiles back into a single large image.
 
 This setup processes all tiles in a single batch run. Ensure your VRAM is sufficient for the number of tiles generated.
 
+> [!WARNING]
+> There is a problem with increased redness.
