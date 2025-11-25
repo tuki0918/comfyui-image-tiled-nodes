@@ -226,7 +226,9 @@ class TiledImageMerger:
                 weight_mask[-feather_h:, :, 0] *= grad_y.flip(0).unsqueeze(1)
 
             # Add to accumulator
-            output[b_idx, y : y + h, x : x + w, :] += tile * weight_mask
+            # Convert to linear space for blending to avoid color shifts (gamma ~2.2 approximation)
+            tile_linear = torch.pow(tile, 2.2)
+            output[b_idx, y : y + h, x : x + w, :] += tile_linear * weight_mask
             weights[b_idx, y : y + h, x : x + w, :] += weight_mask
 
             tile_idx += 1
@@ -235,6 +237,10 @@ class TiledImageMerger:
         # Avoid division by zero
         weights[weights == 0] = 1.0
         output /= weights
+        
+        # Convert back to sRGB
+        output = torch.pow(output, 1.0/2.2)
+        output = torch.clamp(output, 0.0, 1.0)
 
         return (output,)
 
