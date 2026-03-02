@@ -2,6 +2,12 @@ import torch
 import math
 
 
+def _feather_pixels(tile_size, overlap, feather_ratio):
+    # feather_ratio is defined as a ratio of overlap, not full tile size.
+    overlap = max(0, min(int(overlap), int(tile_size)))
+    return int(overlap * feather_ratio)
+
+
 class TiledImageSplitter:
     @classmethod
     def INPUT_TYPES(s):
@@ -44,8 +50,8 @@ class TiledImageSplitter:
         tile_height = min(tile_height, img_h)
 
         # Calculate number of tiles
-        stride_w = tile_width - overlap
-        stride_h = tile_height - overlap
+        stride_w = max(1, tile_width - overlap)
+        stride_h = max(1, tile_height - overlap)
 
         cols = math.ceil((img_w - overlap) / stride_w)
         rows = math.ceil((img_h - overlap) / stride_h)
@@ -82,35 +88,47 @@ class TiledImageSplitter:
 
                     # Generate Mask
                     # Mask shape: [H, W]
-                    mask = torch.ones((tile_height, tile_width), dtype=torch.float32)
+                    mask = torch.ones(
+                        (tile_height, tile_width),
+                        dtype=torch.float32,
+                        device=image.device,
+                    )
 
                     # Apply feathering to mask based on adjacencies
                     # Feathering creates a gradient from 0 (edge) to 1 (inner)
                     # feather_pixel = int(min(tile_width, tile_height) * feather_ratio)
 
-                    feather_w = int(tile_width * feather_ratio)
-                    feather_h = int(tile_height * feather_ratio)
+                    feather_w = _feather_pixels(tile_width, overlap, feather_ratio)
+                    feather_h = _feather_pixels(tile_height, overlap, feather_ratio)
 
                     # Create gradient tensors
                     # Horizontal gradient (0 to 1)
-                    grad_x = torch.linspace(0, 1, feather_w)
+                    grad_x = (
+                        torch.linspace(0, 1, feather_w, device=image.device)
+                        if feather_w > 0
+                        else None
+                    )
                     # Vertical gradient (0 to 1)
-                    grad_y = torch.linspace(0, 1, feather_h)
+                    grad_y = (
+                        torch.linspace(0, 1, feather_h, device=image.device)
+                        if feather_h > 0
+                        else None
+                    )
 
                     # Mask Left (if not first column)
-                    if x > 0:
+                    if x > 0 and feather_w > 0:
                         mask[:, :feather_w] *= grad_x
 
                     # Mask Right (if not last column)
-                    if x + tile_width < img_w:
+                    if x + tile_width < img_w and feather_w > 0:
                         mask[:, -feather_w:] *= grad_x.flip(0)
 
                     # Mask Top (if not first row)
-                    if y > 0:
+                    if y > 0 and feather_h > 0:
                         mask[:feather_h, :] *= grad_y.unsqueeze(1)
 
                     # Mask Bottom (if not last row)
-                    if y + tile_height < img_h:
+                    if y + tile_height < img_h and feather_h > 0:
                         mask[-feather_h:, :] *= grad_y.flip(0).unsqueeze(1)
 
                     results_masks.append(mask)
@@ -158,8 +176,16 @@ class TiledImageMerger:
         # Create output tensor [B, H, W, C]
         # We need an accumulator for color and an accumulator for weights (alpha)
         channels = images.shape[-1] if len(images) > 0 else 3
-        output = torch.zeros((batch_size, orig_h, orig_w, channels), dtype=torch.float32)
-        weights = torch.zeros((batch_size, orig_h, orig_w, 1), dtype=torch.float32)
+        output = torch.zeros(
+            (batch_size, orig_h, orig_w, channels),
+            dtype=torch.float32,
+            device=images.device,
+        )
+        weights = torch.zeros(
+            (batch_size, orig_h, orig_w, 1),
+            dtype=torch.float32,
+            device=images.device,
+        )
 
         tile_idx = 0
 
@@ -207,26 +233,34 @@ class TiledImageMerger:
             # However, if the processing CHANGED the mask, we assume standard feathering for blending.
 
             feather_ratio = tile_info["feather_ratio"]
-            feather_w = int(w * feather_ratio)
-            feather_h = int(h * feather_ratio)
+            feather_w = _feather_pixels(w, tile_info["overlap"], feather_ratio)
+            feather_h = _feather_pixels(h, tile_info["overlap"], feather_ratio)
 
-            weight_mask = torch.ones((h, w, 1), dtype=torch.float32)
+            weight_mask = torch.ones((h, w, 1), dtype=torch.float32, device=images.device)
 
-            grad_x = torch.linspace(0, 1, feather_w)
-            grad_y = torch.linspace(0, 1, feather_h)
+            grad_x = (
+                torch.linspace(0, 1, feather_w, device=images.device)
+                if feather_w > 0
+                else None
+            )
+            grad_y = (
+                torch.linspace(0, 1, feather_h, device=images.device)
+                if feather_h > 0
+                else None
+            )
 
             # Apply same logic as splitter to create weight mask
-            if x > 0:
+            if x > 0 and feather_w > 0:
                 weight_mask[:, :feather_w, 0] *= grad_x
-            if x + w < orig_w:
+            if x + w < orig_w and feather_w > 0:
                 weight_mask[:, -feather_w:, 0] *= grad_x.flip(0)
-            if y > 0:
+            if y > 0 and feather_h > 0:
                 weight_mask[:feather_h, :, 0] *= grad_y.unsqueeze(1)
-            if y + h < orig_h:
+            if y + h < orig_h and feather_h > 0:
                 weight_mask[-feather_h:, :, 0] *= grad_y.flip(0).unsqueeze(1)
 
             # Add to accumulator
-            output[b_idx, y : y + h, x : x + w, :] += tile * weight_mask
+            output[b_idx, y : y + h, x : x + w, :] += tile.float() * weight_mask
             weights[b_idx, y : y + h, x : x + w, :] += weight_mask
 
             tile_idx += 1
@@ -236,7 +270,7 @@ class TiledImageMerger:
         weights[weights == 0] = 1.0
         output /= weights
 
-        return (output,)
+        return (output.clamp(0.0, 1.0),)
 
 
 NODE_CLASS_MAPPINGS = {
